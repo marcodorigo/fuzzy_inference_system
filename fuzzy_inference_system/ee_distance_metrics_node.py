@@ -59,6 +59,16 @@ class DistanceMetricsNode(Node):
         # Distance to target
         dist_to_target = self.euclidean_distance(ee_position, self.target_position)
 
+        # Normalize and clamp distances
+        dist_to_obstacles = min(1.0, dist_to_obstacles / 0.1)
+        dist_to_workspace = min(1.0, dist_to_workspace / 0.1)
+        dist_to_target = min(1.0, dist_to_target / 0.1)
+
+        # Debugging log
+        self.get_logger().debug(
+            f"Computed distances - Obstacles: {dist_to_obstacles}\nWorkspace: {dist_to_workspace}\nTarget: {dist_to_target}"
+        )
+
         # Publish the distances
         distances_msg = PoseStamped()
         distances_msg.header.stamp = self.get_clock().now().to_msg()
