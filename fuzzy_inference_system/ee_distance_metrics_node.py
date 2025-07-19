@@ -10,15 +10,17 @@ class DistanceMetricsNode(Node):
     def __init__(self):
         super().__init__('ee_distance_metrics_node')
 
-        # Define static obstacle as a sphere
-        self.obstacle_center = [0.5, 0.15, 0.7]  # in meters
-        self.obstacle_radius = 0.05  # meters
+        # Declare parameters
+        self.declare_parameter('obstacle_center', [0.5, 0.15, 0.7])
+        self.declare_parameter('obstacle_radius', 0.05)
+        self.declare_parameter('workspace_radius', 0.85)
+        self.declare_parameter('target_position', [0.7, 0.15, 0.5])
 
-        # Define workspace radius (850 mm)
-        self.workspace_radius = 0.85  # meters
-
-        # Define target position
-        self.target_position = [0.7, 0.15, 0.5]  # in meters
+        # Get parameters
+        self.obstacle_center = self.get_parameter('obstacle_center').value
+        self.obstacle_radius = self.get_parameter('obstacle_radius').value
+        self.workspace_radius = self.get_parameter('workspace_radius').value
+        self.target_position = self.get_parameter('target_position').value
 
         # Publisher for distance metrics
         self.distance_metrics_publisher = self.create_publisher(
