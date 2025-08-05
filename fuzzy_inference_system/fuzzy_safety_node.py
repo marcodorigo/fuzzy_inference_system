@@ -41,12 +41,16 @@ class FuzzySafetyNode(Node):
         }
         safety_coefficient = self.fuzzy_system.compute_safety(values)
 
-        # Publish the safety coefficient
+        # Remap safety coefficient from [0.14, 0.85] to [0.01, 0.99]
+        remapped_safety_coefficient = 0.01 + (safety_coefficient - 0.14) * (0.99 - 0.01) / (0.85 - 0.14)
+        remapped_safety_coefficient = max(0.01, min(0.99, remapped_safety_coefficient))  # Clamp to [0.01, 0.99]
+
+        # Publish the remapped safety coefficient
         safety_msg = Float32()
-        safety_msg.data = safety_coefficient
+        safety_msg.data = remapped_safety_coefficient
         self.safety_publisher.publish(safety_msg)
 
-        self.get_logger().info(f"Published safety coefficient: {safety_coefficient}")
+        self.get_logger().info(f"Published remapped safety coefficient: {remapped_safety_coefficient}")
 
 
 class FuzzySafetySystem:
