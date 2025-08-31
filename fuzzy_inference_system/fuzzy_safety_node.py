@@ -25,6 +25,9 @@ class FuzzySafetyNode(Node):
         # Publisher for safety coefficient
         self.safety_publisher = self.create_publisher(Float32, '/safety_coefficient', 10)
 
+        # Flag to control remapping
+        self.remap_flag = 1  # Set to 1 to enable remapping, 0 to disable
+
         self.get_logger().info("✅ Fuzzy Safety Node started and ready.")
 
     def distance_callback(self, msg: PoseStamped):
@@ -41,16 +44,20 @@ class FuzzySafetyNode(Node):
         }
         safety_coefficient = self.fuzzy_system.compute_safety(values)
 
-        # Remap safety coefficient from [0.14, 0.85] to [0.01, 0.99]
-        remapped_safety_coefficient = 0.01 + (safety_coefficient - 0.14) * (0.99 - 0.01) / (0.85 - 0.14)
-        remapped_safety_coefficient = max(0.01, min(0.99, remapped_safety_coefficient))  # Clamp to [0.01, 0.99]
+        # Conditionally remap the safety coefficient
+        if self.remap_flag == 1:
+            # Remap safety coefficient from [0.16, 0.5] to [0.01, 0.99]
+            remapped_safety_coefficient = 0.01 + (safety_coefficient - 0.16) * (0.99 - 0.01) / (0.5 - 0.16)
+            remapped_safety_coefficient = max(0.01, min(0.99, remapped_safety_coefficient))  # Clamp to [0.01, 0.99]
+        else:
+            remapped_safety_coefficient = safety_coefficient  # No remapping
 
-        # Publish the remapped safety coefficient
+        # Publish the safety coefficient
         safety_msg = Float32()
         safety_msg.data = remapped_safety_coefficient
         self.safety_publisher.publish(safety_msg)
 
-        self.get_logger().info(f"Published remapped safety coefficient: {remapped_safety_coefficient}")
+        self.get_logger().info(f"Published safety coefficient: {remapped_safety_coefficient}")
 
 
 class FuzzySafetySystem:
@@ -69,22 +76,22 @@ class FuzzySafetySystem:
 
     def _define_membership_functions(self):
         # Target distance membership functions
-        self.targ_dist.close = gauss(0, 50)
-        self.targ_dist.far = gauss(1, 10)
-        self.targ_dist.medium = gauss(0.5, 10)
+        self.targ_dist.close = gauss(0, 5)  # Sharper drop for close distances (0,17 was too smooth)
+        self.targ_dist.far = gauss(0.5, 20)
+        self.targ_dist.medium = gauss(1, 17)
 
         # Workspace distance membership functions
-        self.ws_dist.close = gauss(0, 30)
+        self.ws_dist.close = gauss(0, 5)  # Sharper drop for close distances (0,30 was too smooth)
         self.ws_dist.medium = gauss(0.5, 10)
         self.ws_dist.far = gauss(1, 30)
 
         # Obstacle distance membership functions
-        self.obs_dist.close = gauss(0, 17)
+        self.obs_dist.close = gauss(0, 5)  # Sharper drop for close distances (0,17 was too smooth)
         self.obs_dist.medium = gauss(0.5, 20)
         self.obs_dist.far = gauss(1, 17)
 
         # Safety factor membership functions
-        self.safety.acs = gauss(0, 17)
+        self.safety.acs = gauss(0, 5)  # Sharper drop for low safety
         self.safety.shared = trapezoid(0.1, 0.2, 0.85, 0.95)
         self.safety.human = triangular(0.8, 2, c=1)
 
