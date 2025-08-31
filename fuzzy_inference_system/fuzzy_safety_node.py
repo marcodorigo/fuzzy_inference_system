@@ -5,7 +5,7 @@ from std_msgs.msg import Float32
 from fuzzylogic.classes import Domain, Rule
 from fuzzylogic.functions import gauss, triangular, trapezoid
 from fuzzylogic.hedges import very
-
+import numpy as np
 
 class FuzzySafetyNode(Node):
     def __init__(self):
@@ -26,7 +26,7 @@ class FuzzySafetyNode(Node):
         self.safety_publisher = self.create_publisher(Float32, '/safety_coefficient', 10)
 
         # Flag to control remapping
-        self.remap_flag = 1  # Set to 1 to enable remapping, 0 to disable
+        self.remap_flag = 0 # Set to 1 to enable remapping, 0 to disable
 
         self.get_logger().info("✅ Fuzzy Safety Node started and ready.")
 
@@ -76,24 +76,24 @@ class FuzzySafetySystem:
 
     def _define_membership_functions(self):
         # Target distance membership functions
-        self.targ_dist.close = gauss(0, 5)  # Sharper drop for close distances (0,17 was too smooth)
-        self.targ_dist.far = gauss(0.5, 20)
-        self.targ_dist.medium = gauss(1, 17)
+        self.targ_dist.close = np.vectorize(gauss(0, 17))
+        self.targ_dist.medium = np.vectorize(gauss(0.5, 100))
+        self.targ_dist.far = np.vectorize(gauss(1, 17))
 
         # Workspace distance membership functions
-        self.ws_dist.close = gauss(0, 5)  # Sharper drop for close distances (0,30 was too smooth)
-        self.ws_dist.medium = gauss(0.5, 10)
-        self.ws_dist.far = gauss(1, 30)
+        self.ws_dist.close = np.vectorize(gauss(0, 17))
+        self.ws_dist.medium = np.vectorize(gauss(0.5, 20))
+        self.ws_dist.far = np.vectorize(gauss(1, 17))
 
         # Obstacle distance membership functions
-        self.obs_dist.close = gauss(0, 5)  # Sharper drop for close distances (0,17 was too smooth)
-        self.obs_dist.medium = gauss(0.5, 20)
-        self.obs_dist.far = gauss(1, 17)
+        self.obs_dist.close = np.vectorize(gauss(0, 17))
+        self.obs_dist.medium = np.vectorize(gauss(0.5, 100))
+        self.obs_dist.far = np.vectorize(gauss(1, 17))
 
         # Safety factor membership functions
-        self.safety.acs = gauss(0, 5)  # Sharper drop for low safety
-        self.safety.shared = trapezoid(0.1, 0.2, 0.85, 0.95)
-        self.safety.human = triangular(0.8, 2, c=1)
+        self.safety.acs = np.vectorize(triangular(-1, 0.1, c=0))
+        self.safety.shared = np.vectorize(triangular(0.1, 0.9, c=0.5))
+        self.safety.human = np.vectorize(triangular(0.9, 2, c=1))
 
     def _define_rules(self):
         # Define fuzzy rules
