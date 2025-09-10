@@ -57,7 +57,7 @@ class FuzzySafetyNode(Node):
         safety_msg.data = remapped_safety_coefficient
         self.safety_publisher.publish(safety_msg)
 
-        self.get_logger().info(f"Published safety coefficient: {remapped_safety_coefficient}")
+        # self.get_logger().info(f"Published safety coefficient: {remapped_safety_coefficient}")
 
 
 class FuzzySafetySystem:

@@ -1,8 +1,9 @@
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import PoseStamped
-from std_msgs.msg import Float32, Float32MultiArray
+from std_msgs.msg import Float32, Float32MultiArray, Float64MultiArray
 import math
+import numpy as np  # For matrix operations
 from visualization_msgs.msg import Marker
 
 
@@ -20,6 +21,9 @@ class DistanceMetricsNode(Node):
         # Publishers
         self.distance_metrics_publisher = self.create_publisher(
             PoseStamped, '/distance_metrics', 10
+        )
+        self.manipulability_publisher = self.create_publisher(
+            Float32, '/manipulability_metric', 10
         )
 
         # Subscribers to parameter topics
@@ -53,6 +57,14 @@ class DistanceMetricsNode(Node):
             PoseStamped,
             '/admittance_controller/pose_debug',
             self.pose_callback,
+            10
+        )
+
+        # Subscribe to the Jacobian topic
+        self.create_subscription(
+            Float64MultiArray,
+            '/virtual_wrench_commander/jacobian',
+            self.jacobian_callback,
             10
         )
 
@@ -95,9 +107,9 @@ class DistanceMetricsNode(Node):
         dist_to_target = min(1.0, dist_to_target / 0.1)
 
         # Debugging log
-        self.get_logger().debug(
-            f"Computed distances - Obstacles: {dist_to_obstacles}, Workspace: {dist_to_workspace}, Target: {dist_to_target}"
-        )
+        # self.get_logger().debug(
+        #     f"Computed distances - Obstacles: {dist_to_obstacles}, Workspace: {dist_to_workspace}, Target: {dist_to_target}"
+        # )
 
         # Publish the distances
         distances_msg = PoseStamped()
@@ -107,6 +119,25 @@ class DistanceMetricsNode(Node):
         distances_msg.pose.position.y = dist_to_workspace
         distances_msg.pose.position.z = dist_to_target
         self.distance_metrics_publisher.publish(distances_msg)
+
+    def jacobian_callback(self, msg: Float32MultiArray):
+        # Convert the Jacobian data into a 6x6 matrix
+        jacobian = np.array(msg.data).reshape((6, 6))
+
+        # Compute the manipulability metric (determinant of J * J^T)
+        manipulability = np.sqrt(np.linalg.det(jacobian @ jacobian.T))
+
+        # Normalize and clamp the manipulability metric to the range [0, 1] for values 0.02 to 0.08
+        normalized_manipulability = (manipulability - 0.02) / (0.08 - 0.02)
+        normalized_manipulability = min(1.0, max(0.0, normalized_manipulability))
+
+        # Publish the normalized manipulability metric
+        manipulability_msg = Float32()
+        manipulability_msg.data = normalized_manipulability
+        self.manipulability_publisher.publish(manipulability_msg)
+
+        # Debugging log
+        self.get_logger().debug(f"Computed manipulability: {manipulability}, Normalized: {normalized_manipulability}")
 
     @staticmethod
     def euclidean_distance(p1, p2):
