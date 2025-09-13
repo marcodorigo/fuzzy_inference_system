@@ -124,12 +124,20 @@ class DistanceMetricsNode(Node):
         # Convert the Jacobian data into a 6x6 matrix
         jacobian = np.array(msg.data).reshape((6, 6))
 
-        # Compute the manipulability metric (determinant of J * J^T)
+        # Compute the manipulability metric (determinant of J * J^T) - Volume of the manipulability ellipsoid
         manipulability = np.sqrt(np.linalg.det(jacobian @ jacobian.T))
 
-        # Normalize and clamp the manipulability metric to the range [0, 1] for values 0.02 to 0.08
+        # Normalize and clamp the manipulability metric to the range [0, 1] for values 0.02 to 0.08 (found experimentally)
         normalized_manipulability = (manipulability - 0.02) / (0.08 - 0.02)
         normalized_manipulability = min(1.0, max(0.0, normalized_manipulability))
+
+        # Compute manipulability as the ratio of the smallest to largest singular value - Condition number approach
+        # singular_values = np.linalg.svd(jacobian, compute_uv=False)
+        # if singular_values[0] > 1e-6:  # Avoid division by zero
+        #     manipulability = singular_values[-1] / singular_values[0]
+        # else:
+        #     manipulability = 0.0
+        # normalized_manipulability = 
 
         # Publish the normalized manipulability metric
         manipulability_msg = Float32()
