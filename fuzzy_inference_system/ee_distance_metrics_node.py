@@ -13,8 +13,8 @@ class DistanceMetricsNode(Node):
         super().__init__('ee_distance_metrics_node')
 
         # Initialize parameters with default values
-        self.obstacle_center = [0.0, 0.0, 0.0]
-        self.obstacle_radius = 0.0
+        self.spherical_obstacles = []  # List of spherical obstacles
+        self.cylinder_base = {"center": [0.0, 0.0, 0.0], "radius": 0.0, "height": 0.0}
         self.workspace_radius = 0.0
         self.target_position = [0.0, 0.0, 0.0]
 
@@ -29,14 +29,14 @@ class DistanceMetricsNode(Node):
         # Subscribers to parameter topics
         self.create_subscription(
             Float32MultiArray,
-            '/obstacle_center',
-            self.obstacle_center_callback,
+            '/spherical_obstacles',
+            self.spherical_obstacles_callback,
             10
         )
         self.create_subscription(
-            Float32,
-            '/obstacle_radius',
-            self.obstacle_radius_callback,
+            Float32MultiArray,
+            '/cylinder_base',
+            self.cylinder_base_callback,
             10
         )
         self.create_subscription(
@@ -71,13 +71,22 @@ class DistanceMetricsNode(Node):
         # Log initialization
         self.get_logger().info("✅ EE Distance Metrics Node started and ready.")
 
-    def obstacle_center_callback(self, msg: Float32MultiArray):
-        self.obstacle_center = list(msg.data)
-        self.get_logger().info(f"Updated obstacle_center: {[round(x, 3) for x in self.obstacle_center]}")
+    def spherical_obstacles_callback(self, msg: Float32MultiArray):
+        data = list(msg.data)
+        self.spherical_obstacles = [
+            {"center": data[i:i+3], "radius": data[i+3]}
+            for i in range(0, len(data), 4)
+        ]
+        self.get_logger().info(f"Updated spherical_obstacles: {self.spherical_obstacles}")
 
-    def obstacle_radius_callback(self, msg: Float32):
-        self.obstacle_radius = msg.data  # Directly assign the float value
-        self.get_logger().info(f"Updated obstacle_radius: {round(self.obstacle_radius, 3)}")
+    def cylinder_base_callback(self, msg: Float32MultiArray):
+        data = list(msg.data)
+        self.cylinder_base = {
+            "center": data[:3],
+            "radius": data[3],
+            "height": data[4]
+        }
+        self.get_logger().info(f"Updated cylinder_base: {self.cylinder_base}")
 
     def workspace_radius_callback(self, msg: Float32):
         self.workspace_radius = msg.data  # Directly assign the float value
@@ -90,9 +99,18 @@ class DistanceMetricsNode(Node):
     def pose_callback(self, msg: PoseStamped):
         ee_position = [msg.pose.position.x, msg.pose.position.y, msg.pose.position.z]
 
-        # Distance to obstacle surface
-        dist_to_obstacle_center = self.euclidean_distance(ee_position, self.obstacle_center)
-        dist_to_obstacles = max(0.0, dist_to_obstacle_center - self.obstacle_radius)
+        # Distance to spherical obstacles
+        dist_to_obstacles = float('inf')
+        for obstacle in self.spherical_obstacles:
+            dist_to_center = self.euclidean_distance(ee_position, obstacle["center"])
+            dist_to_surface = max(0.0, dist_to_center - obstacle["radius"])
+            dist_to_obstacles = min(dist_to_obstacles, dist_to_surface)
+
+        # Distance to cylindrical base
+        dist_to_cylinder = self.distance_to_cylinder(ee_position, self.cylinder_base)
+
+        # Combine distances to obstacles and cylinder
+        dist_to_obstacles = min(dist_to_obstacles, dist_to_cylinder)
 
         # Distance to workspace boundary
         dist_from_base = self.euclidean_distance(ee_position, [0.0, 0.0, 0.0])
@@ -105,11 +123,6 @@ class DistanceMetricsNode(Node):
         dist_to_obstacles = min(1.0, dist_to_obstacles / 0.1)
         dist_to_workspace = min(1.0, dist_to_workspace / 0.1)
         dist_to_target = min(1.0, dist_to_target / 0.1)
-
-        # Debugging log
-        # self.get_logger().debug(
-        #     f"Computed distances - Obstacles: {dist_to_obstacles}, Workspace: {dist_to_workspace}, Target: {dist_to_target}"
-        # )
 
         # Publish the distances
         distances_msg = PoseStamped()
@@ -131,25 +144,38 @@ class DistanceMetricsNode(Node):
         normalized_manipulability = (manipulability - 0.02) / (0.08 - 0.02)
         normalized_manipulability = min(1.0, max(0.0, normalized_manipulability))
 
-        # Compute manipulability as the ratio of the smallest to largest singular value - Condition number approach
-        # singular_values = np.linalg.svd(jacobian, compute_uv=False)
-        # if singular_values[0] > 1e-6:  # Avoid division by zero
-        #     manipulability = singular_values[-1] / singular_values[0]
-        # else:
-        #     manipulability = 0.0
-        # normalized_manipulability = 
-
         # Publish the normalized manipulability metric
         manipulability_msg = Float32()
         manipulability_msg.data = normalized_manipulability
         self.manipulability_publisher.publish(manipulability_msg)
 
-        # Debugging log
-        self.get_logger().debug(f"Computed manipulability: {manipulability}, Normalized: {normalized_manipulability}")
-
     @staticmethod
     def euclidean_distance(p1, p2):
         return math.sqrt(sum((a - b) ** 2 for a, b in zip(p1, p2)))
+
+    @staticmethod
+    def distance_to_cylinder(point, cylinder):
+        # Calculate the distance from a point to the surface of a cylinder
+        base_center = cylinder["center"]
+        radius = cylinder["radius"]
+        height = cylinder["height"]
+
+        # Project the point onto the cylinder's axis
+        dx, dy = point[0] - base_center[0], point[1] - base_center[1]
+        dist_to_axis = math.sqrt(dx**2 + dy**2)
+        dist_to_side = max(0.0, dist_to_axis - radius)
+
+        # Check height bounds
+        z = point[2]
+        if z < base_center[2]:
+            dist_to_top_bottom = base_center[2] - z
+        elif z > base_center[2] + height:
+            dist_to_top_bottom = z - (base_center[2] + height)
+        else:
+            dist_to_top_bottom = 0.0
+
+        # Return the minimum distance
+        return math.sqrt(dist_to_side**2 + dist_to_top_bottom**2)
 
 
 def main(args=None):
