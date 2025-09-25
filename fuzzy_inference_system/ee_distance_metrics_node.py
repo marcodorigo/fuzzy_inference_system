@@ -69,7 +69,7 @@ class DistanceMetricsNode(Node):
         )
 
         # Log initialization
-        self.get_logger().info("✅ EE Distance Metrics Node started and ready.")
+        self.get_logger().info("Distance Metrics Node started and ready.")
 
     def spherical_obstacles_callback(self, msg: Float32MultiArray):
         data = list(msg.data)
@@ -77,7 +77,6 @@ class DistanceMetricsNode(Node):
             {"center": data[i:i+3], "radius": data[i+3]}
             for i in range(0, len(data), 4)
         ]
-        self.get_logger().info(f"Updated spherical_obstacles: {self.spherical_obstacles}")
 
     def cylinder_base_callback(self, msg: Float32MultiArray):
         data = list(msg.data)
@@ -86,15 +85,12 @@ class DistanceMetricsNode(Node):
             "radius": data[3],
             "height": data[4]
         }
-        self.get_logger().info(f"Updated cylinder_base: {self.cylinder_base}")
 
     def workspace_radius_callback(self, msg: Float32):
-        self.workspace_radius = msg.data  # Directly assign the float value
-        self.get_logger().info(f"Updated workspace_radius: {round(self.workspace_radius, 3)}")
+        self.workspace_radius = msg.data
 
     def target_position_callback(self, msg: Float32MultiArray):
         self.target_position = list(msg.data)
-        self.get_logger().info(f"Updated target_position: {[round(x, 3) for x in self.target_position]}")
 
     def pose_callback(self, msg: PoseStamped):
         ee_position = [msg.pose.position.x, msg.pose.position.y, msg.pose.position.z]
