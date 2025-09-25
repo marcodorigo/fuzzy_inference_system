@@ -6,6 +6,7 @@ from fuzzylogic.classes import Domain, Rule
 from fuzzylogic.functions import gauss, triangular, trapezoid
 from fuzzylogic.hedges import very
 import numpy as np
+from itertools import product
 
 class FuzzySafetyNode(Node):
     def __init__(self):
@@ -38,6 +39,9 @@ class FuzzySafetyNode(Node):
 
         # Publisher for safety coefficient
         self.safety_publisher = self.create_publisher(Float32, '/safety_coefficient', 10)
+
+
+
 
         # Timer to periodically compute and publish the safety coefficient
         self.timer = self.create_timer(0.1, self.compute_and_publish_safety)
@@ -128,50 +132,33 @@ class FuzzySafetySystem:
         self.safety.human = np.vectorize(triangular(0.9, 2, c=1))
 
     def _define_rules(self):
+        # Define labels for each input
+        target_labels = [self.targ_dist.close, self.targ_dist.medium, self.targ_dist.far]
+        obstacle_labels = [self.obs_dist.close, self.obs_dist.medium, self.obs_dist.far]
+        workspace_labels = [self.ws_dist.close, self.ws_dist.medium, self.ws_dist.far]
+        manip_labels = [self.manipulability.low, self.manipulability.medium, self.manipulability.high]
+
+        rules = {}
+
+        # Generate all combinations
+        for t, o, w, m in product(target_labels, obstacle_labels, workspace_labels, manip_labels):
+            # Determine output based on logic
+            if (t == self.targ_dist.close or
+                o == self.obs_dist.close or
+                w == self.ws_dist.close or
+                m == self.manipulability.low):
+                rules[(t, o, w, m)] = self.safety.acs
+            elif (t == self.targ_dist.medium or
+                  o == self.obs_dist.medium or
+                  w == self.ws_dist.medium or
+                  m == self.manipulability.medium):
+                rules[(t, o, w, m)] = self.safety.shared
+            else:
+                # all far/high
+                rules[(t, o, w, m)] = self.safety.human
+
         # Define fuzzy rules considering manipulability
-        return Rule({
-            # If any input is close/low, output is acs
-            (self.targ_dist.close, self.obs_dist.close, self.ws_dist.close, self.manipulability.low): self.safety.acs,
-            (self.targ_dist.close, self.obs_dist.close, self.ws_dist.medium, self.manipulability.low): self.safety.acs,
-            (self.targ_dist.close, self.obs_dist.close, self.ws_dist.far, self.manipulability.low): self.safety.acs,
-            (self.targ_dist.close, self.obs_dist.medium, self.ws_dist.close, self.manipulability.low): self.safety.acs,
-            (self.targ_dist.close, self.obs_dist.medium, self.ws_dist.medium, self.manipulability.low): self.safety.acs,
-            (self.targ_dist.close, self.obs_dist.medium, self.ws_dist.far, self.manipulability.low): self.safety.acs,
-            (self.targ_dist.close, self.obs_dist.far, self.ws_dist.close, self.manipulability.low): self.safety.acs,
-            (self.targ_dist.close, self.obs_dist.far, self.ws_dist.medium, self.manipulability.low): self.safety.acs,
-            (self.targ_dist.close, self.obs_dist.far, self.ws_dist.far, self.manipulability.low): self.safety.acs,
-            (self.targ_dist.medium, self.obs_dist.close, self.ws_dist.close, self.manipulability.low): self.safety.acs,
-            (self.targ_dist.medium, self.obs_dist.close, self.ws_dist.medium, self.manipulability.low): self.safety.acs,
-            (self.targ_dist.medium, self.obs_dist.close, self.ws_dist.far, self.manipulability.low): self.safety.acs,
-            (self.targ_dist.medium, self.obs_dist.medium, self.ws_dist.close, self.manipulability.low): self.safety.acs,
-            (self.targ_dist.medium, self.obs_dist.medium, self.ws_dist.medium, self.manipulability.low): self.safety.acs,
-            (self.targ_dist.medium, self.obs_dist.medium, self.ws_dist.far, self.manipulability.low): self.safety.acs,
-            (self.targ_dist.medium, self.obs_dist.far, self.ws_dist.close, self.manipulability.low): self.safety.acs,
-            (self.targ_dist.medium, self.obs_dist.far, self.ws_dist.medium, self.manipulability.low): self.safety.acs,
-            (self.targ_dist.medium, self.obs_dist.far, self.ws_dist.far, self.manipulability.low): self.safety.acs,
-            (self.targ_dist.far, self.obs_dist.close, self.ws_dist.close, self.manipulability.low): self.safety.acs,
-            (self.targ_dist.far, self.obs_dist.close, self.ws_dist.medium, self.manipulability.low): self.safety.acs,
-            (self.targ_dist.far, self.obs_dist.close, self.ws_dist.far, self.manipulability.low): self.safety.acs,
-            (self.targ_dist.far, self.obs_dist.medium, self.ws_dist.close, self.manipulability.low): self.safety.acs,
-            (self.targ_dist.far, self.obs_dist.medium, self.ws_dist.medium, self.manipulability.low): self.safety.acs,
-            (self.targ_dist.far, self.obs_dist.medium, self.ws_dist.far, self.manipulability.low): self.safety.acs,
-            (self.targ_dist.far, self.obs_dist.far, self.ws_dist.close, self.manipulability.low): self.safety.acs,
-            (self.targ_dist.far, self.obs_dist.far, self.ws_dist.medium, self.manipulability.low): self.safety.acs,
-            (self.targ_dist.far, self.obs_dist.far, self.ws_dist.far, self.manipulability.low): self.safety.acs,
-
-            # If all inputs are medium or far/high, output is shared
-            (self.targ_dist.medium, self.obs_dist.medium, self.ws_dist.medium, self.manipulability.medium): self.safety.shared,
-            (self.targ_dist.medium, self.obs_dist.medium, self.ws_dist.far, self.manipulability.medium): self.safety.shared,
-            (self.targ_dist.medium, self.obs_dist.far, self.ws_dist.medium, self.manipulability.medium): self.safety.shared,
-            (self.targ_dist.medium, self.obs_dist.far, self.ws_dist.far, self.manipulability.medium): self.safety.shared,
-            (self.targ_dist.far, self.obs_dist.medium, self.ws_dist.medium, self.manipulability.medium): self.safety.shared,
-            (self.targ_dist.far, self.obs_dist.medium, self.ws_dist.far, self.manipulability.medium): self.safety.shared,
-            (self.targ_dist.far, self.obs_dist.far, self.ws_dist.medium, self.manipulability.medium): self.safety.shared,
-            (self.targ_dist.far, self.obs_dist.far, self.ws_dist.far, self.manipulability.medium): self.safety.shared,
-
-            # If all inputs are far/high, output is human
-            (self.targ_dist.far, self.obs_dist.far, self.ws_dist.far, self.manipulability.high): self.safety.human,
-        })
+        return Rule(rules)
 
     def compute_safety(self, values):
         """
