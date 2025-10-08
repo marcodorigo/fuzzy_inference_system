@@ -62,7 +62,7 @@ class DistanceMetricsNode(Node):
 
         # Subscribe to the Jacobian topic
         self.create_subscription(
-            Float64MultiArray,
+            Float32MultiArray,
             '/virtual_wrench_commander/jacobian',
             self.jacobian_callback,
             10
@@ -142,7 +142,7 @@ class DistanceMetricsNode(Node):
 
         # Publish the normalized manipulability metric
         manipulability_msg = Float32()
-        manipulability_msg.data = normalized_manipulability
+        manipulability_msg.data = float(normalized_manipulability)  # Convert numpy scalar to Python float
         self.manipulability_publisher.publish(manipulability_msg)
 
     @staticmethod
