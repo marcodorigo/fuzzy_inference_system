@@ -14,6 +14,7 @@ class DistanceMetricsNode(Node):
 
         # Initialize parameters with default values
         self.spherical_obstacles = []  # List of spherical obstacles
+        self.cylindrical_obstacles = []  # List of cylindrical obstacles
         self.cylinder_base = {"center": [0.0, 0.0, 0.0], "radius": 0.0, "height": 0.0}
         self.workspace_radius = 0.0
         self.target_position = [0.0, 0.0, 0.0]
@@ -31,6 +32,12 @@ class DistanceMetricsNode(Node):
             Float32MultiArray,
             '/spherical_obstacles',
             self.spherical_obstacles_callback,
+            10
+        )
+        self.create_subscription(
+            Float32MultiArray,
+            '/cylindrical_obstacles',
+            self.cylindrical_obstacles_callback,
             10
         )
         self.create_subscription(
@@ -78,6 +85,13 @@ class DistanceMetricsNode(Node):
             for i in range(0, len(data), 4)
         ]
 
+    def cylindrical_obstacles_callback(self, msg: Float32MultiArray):
+        data = list(msg.data)
+        self.cylindrical_obstacles = [
+            {"center": data[i:i+3], "radius": data[i+3], "height": data[i+4]}
+            for i in range(0, len(data), 5)
+        ]
+
     def cylinder_base_callback(self, msg: Float32MultiArray):
         data = list(msg.data)
         self.cylinder_base = {
@@ -101,6 +115,11 @@ class DistanceMetricsNode(Node):
             dist_to_center = self.euclidean_distance(ee_position, obstacle["center"])
             dist_to_surface = max(0.0, dist_to_center - obstacle["radius"])
             dist_to_obstacles = min(dist_to_obstacles, dist_to_surface)
+
+        # Distance to cylindrical obstacles
+        for obstacle in self.cylindrical_obstacles:
+            dist_to_cylinder_obstacle = self.distance_to_cylinder(ee_position, obstacle)
+            dist_to_obstacles = min(dist_to_obstacles, dist_to_cylinder_obstacle)
 
         # Distance to cylindrical base
         dist_to_cylinder = self.distance_to_cylinder(ee_position, self.cylinder_base)
