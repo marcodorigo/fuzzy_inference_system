@@ -62,7 +62,7 @@ class DistanceMetricsNode(Node):
 
         # Subscribe to the Jacobian topic
         self.create_subscription(
-            Float64MultiArray,
+            Float32MultiArray,
             '/virtual_wrench_commander/jacobian',
             self.jacobian_callback,
             10
